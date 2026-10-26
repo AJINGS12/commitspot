@@ -7,7 +7,7 @@
     "node": ">=20.12"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && pnpm -r --if-present typecheck",
     "test": "vitest run --passWithNoTests",
     "test:sandbox": "cross-env RUN_SANDBOX=1 vitest run --passWithNoTests tests/sandbox",
     "gate:paypal": "tsx scripts/paypal-gate.ts"

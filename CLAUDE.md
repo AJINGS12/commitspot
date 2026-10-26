@@ -185,9 +185,9 @@ commitspot/
 
 ### 7.1 Records
 
-- **Plan:** id, platform, chat_id, organizer_id, title, starts_at, timezone, currency, price_per_spot (minor units), spots, min_headcount?, free_dropout_deadline, capture_cutoff, no_replacement_rule (`FULL_SHARE` | `SPLIT_PERCENT` | `EMERGENCY_PASS`), status.
+- **Plan:** id, platform, chat_id, organizer_id, title, starts_at, timezone, currency, price_per_spot (minor units), spots, min_headcount?, free_dropout_deadline, capture_cutoff, no_replacement_rule (`FULL_SHARE` (default) | `SPLIT_PERCENT` + percent), emergency_release_enabled (default true), status.
 - **Participant:** id, platform, platform_user_id, display_name, paypal_payer_id?
-- **Commitment:** id, plan_id, participant_id, status, amount, paypal_order_id?, paypal_authorization_id?, authorized_at?, dropped_at?, replaced_by_commitment_id?
+- **Commitment:** id, plan_id, participant_id, status, amount, paypal_order_id?, paypal_authorization_id? (always the newest), authorized_at? (original; the 29-day window counts from here), reauthorized_at?, dropped_at?, replaced_by_commitment_id?, emergency_release? (`REQUESTED` | `APPROVED` | `REFUSED` | `EXPIRED`, requested_at, decided_at?)
 - **Offer:** id, plan_id, spot_commitment_id, offered_to_participant_id, sent_at, expires_at, status (`OPEN` | `ACCEPTED` | `EXPIRED` | `DECLINED` | `CANCELLED`).
 - **MoneyEvent:** id, commitment_id, action (`AUTHORIZE` | `VOID` | `REAUTHORIZE` | `CAPTURE`), rule_applied, request_id, paypal_response_id, status, created_at.
 - **RulesAcceptance:** commitment_id, rules_snapshot (JSON), accepted_at. Evidence for disputes.
@@ -195,6 +195,8 @@ commitspot/
 ### 7.2 Plan status
 
 `DRAFT → OPEN → LOCKED (cutoff passed) → COMPLETED`, or `CANCELLED` from DRAFT/OPEN.
+
+No cancelling after the cutoff: captures have started and refunds are not supported (decision 27 Oct 2026).
 
 ### 7.3 Commitment status and money state
 
@@ -209,6 +211,7 @@ commitspot/
 | `CHARGED_MISSED_SPOT` | captured |
 | `PAID` | captured |
 | `RELEASED_CANCELLED` | voided |
+| `RELEASED_EMERGENCY` | voided (organizer-approved emergency release) |
 | `CAPTURE_FAILED` | needs attention |
 
 ### 7.4 Key transitions (implement exactly; test every one)
@@ -219,7 +222,27 @@ commitspot/
 - Offer accepted → new participant goes through join flow → when THEIR authorization succeeds: new commitment `COMMITTED`, original commitment VOID → `REPLACED`. Never void the original before the replacement is authorized.
 - Cutoff job: `COMMITTED` → CAPTURE → `PAID`; `DROPPED_LATE_SEEKING` → CAPTURE (per no_replacement_rule) → `CHARGED_MISSED_SPOT`.
 - Plan cancelled → VOID every authorized commitment → `RELEASED_CANCELLED`.
-- Capture fails → `CAPTURE_FAILED`, notify participant and organizer, offer the spot if before start time.
+- Capture fails → `CAPTURE_FAILED`, notify participant and organizer, offer the spot if before start time. A replacement for that spot (before the start) is captured immediately on authorization, since the cutoff has passed.
+- `DROPPED_LATE_SEEKING` + emergency release request (plan has `emergency_release_enabled`, before the cutoff) → ask the organizer. Approved → VOID → `RELEASED_EMERGENCY` (spot stays open for a replacement). Refused → no money action; the plan's no_replacement_rule still applies. Undecided at the cutoff → request `EXPIRED`, normal rule applies.
+
+### 7.5 Decisions (27 Oct 2026)
+
+1. **Emergency release** is a per-plan on/off setting, `emergency_release_enabled`, **default on**, separate from the dropout rule (it works with `FULL_SHARE` and `SPLIT_PERCENT`). A confirmed late dropout asks; the agent asks the **organizer**; only the organizer decides. The organizer can only **release** (void), never charge. One request per commitment; a decision is never flipped. If the setting is off, the engine returns `EMERGENCY_RELEASE_NOT_ENABLED` and the agent tells the participant the organizer hasn't enabled emergency releases. No monthly free passes yet (roadmap).
+2. **SPLIT_PERCENT:** the late dropout pays `percent` (1–100) of their own share, rounded down; the organizer absorbs the rest, because nobody else can be charged beyond their share. The plan card and approval page must say so, using the fixed wording from `rulesSummary` in `packages/core` (e.g. "Late dropouts pay 50% ($2.50) if nobody takes their spot; you cover the rest ($2.50)."). Money terms are never worded by the LLM. **FULL_SHARE is the default.**
+3. **No cancelling after the cutoff** (see 7.2).
+4. **Reauthorization timing:** the earliest attempt is 72 hours after the original authorization **plus a 1-hour margin** (`REAUTH_EARLIEST_MARGIN_MS`), until the 30 Oct 2026 sandbox retry confirms exactly when PayPal's "day 4" starts. If the cutoff falls inside that margin, no reauthorization is possible; the engine flags it (the capture still works, it just isn't guaranteed).
+5. **Minimum headcount** is validated only; no behaviour in the MVP. Later: if it isn't reached by the deadline, the engine asks the organizer whether to cancel.
+6. **No chat message at the moment of authorizing;** the "you're locked in" message on success covers it.
+7. **Failed reauthorization → re-approval** (refines 8.2):
+   - The participant gets a new join link (`CREATE_ORDER` with purpose `REAPPROVAL`) and a window of **min(24 h, capture_cutoff − 2 h)** from the failure. If that is already past, skip straight to offering the spot.
+   - The **old authorization stays as a fallback** (valid to day 29). It is voided only **after** the new authorization succeeds (`REAPPROVAL_SUPERSEDED_VOID`); the new one then counts as a fresh authorization (new 29-day window, new single reauthorization). If PayPal refuses the new authorization, the old hold is untouched and a fresh link is sent while the window is open.
+   - No re-approval by the deadline (`REAPPROVAL_DEADLINE` job) → the participant stays `COMMITTED` on the old hold and the spot is **offered to the waitlist**. If a replacement is authorized → the old hold is voided and the participant becomes `REPLACED`. If not → the cutoff **captures the old hold**; if that fails → `CAPTURE_FAILED` (normal 7.4 path).
+   - **Wording is fixed, not LLM-written** (`fixedNoticeText` in `packages/core`; the time is shown in the plan's time zone). Someone who still plans to come can lose their spot here, so they must be clearly warned:
+     - Request: "Your PayPal hold needs a quick re-approval to keep your spot. If you don't re-approve by Thu 26 Nov, 12:00 GMT, your spot will be offered to the waitlist."
+     - After the deadline: "You didn't re-approve your PayPal hold in time, so your spot is now offered to the waitlist. If someone takes it, your hold is released and you pay nothing. If nobody does, you keep your spot and your share is charged from your existing hold at the cutoff."
+     - The executor sends this text verbatim with the new link; the agent may add a friendly line around it but never rewords it.
+   - The re-approval link stops working at the deadline. An authorization already in flight at the deadline is still honoured. Any open re-approval closes at the cutoff. No second reauthorization attempt is made while re-approval is open or expired.
+8. **Reauthorization gap warning:** when the organizer opens a plan whose cutoff is 72 h to 72 h + 1 h away (`planWarnings` / `CUTOFF_IN_REAUTH_GAP`), the engine warns them that holds placed now can't be renewed before the cutoff. The plan still opens. Joins that land in the gap later are flagged one by one (`REAUTH_NOT_POSSIBLE`).
 
 ---
 

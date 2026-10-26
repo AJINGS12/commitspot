@@ -1,4 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // ES2023 typings let Intl.NumberFormat take decimal strings (no floats for display).
+    "lib": ["ES2023"],
+    // No Node types: core must not touch fs, net, process or Buffer.
+    "types": []
+  },
   "include": ["src/**/*.ts"]
 }
