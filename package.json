@@ -1,0 +1,25 @@
+{
+  "name": "commitspot",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.12.4",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:sandbox": "cross-env RUN_SANDBOX=1 vitest run --passWithNoTests tests/sandbox",
+    "gate:paypal": "tsx scripts/paypal-gate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "cross-env": "^10.1.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

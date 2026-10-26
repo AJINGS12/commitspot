@@ -1,0 +1,7 @@
+{
+  "name": "@commitspot/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fastify: webhooks, REST API for dashboard, PayPal return page"
+}

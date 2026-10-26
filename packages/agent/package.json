@@ -1,0 +1,7 @@
+{
+  "name": "@commitspot/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "LLM calls that return proposals only"
+}

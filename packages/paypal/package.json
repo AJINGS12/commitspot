@@ -1,0 +1,7 @@
+{
+  "name": "@commitspot/paypal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed PayPal Orders v2 + Payments v2 client"
+}

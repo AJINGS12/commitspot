@@ -239,8 +239,11 @@ The approval page must state: amount, "authorized now, charged at the cutoff", t
 
 - An authorization is valid for **29 days**. PayPal recommends capturing within the **3-day honor period**.
 - After the honor period, you can **reauthorize** (`POST /v2/payments/authorizations/{id}/reauthorize`). It returns a **new authorization ID** with a new 3-day honor period. Always capture against the newest ID.
-- Engine behaviour: if `capture_cutoff - authorized_at > 3 days`, schedule a reauthorization so the latest honor period covers the cutoff. Plans may not open joining more than ~4 weeks before the cutoff.
-- Test reauthorization early in the sandbox; confirm whether it works for every funding source used in the demo.
+- **Sandbox finding (27 Oct 2026):** reauthorizing inside the honor period fails with `422 REAUTHORIZATION_TOO_SOON`, and PayPal's error says a reauthorization is allowed **only once**, from day 4 to day 29 after the original authorization. Some docs mention multiple reauthorizations; design for the stricter rule.
+- Engine behaviour: if `capture_cutoff - authorized_at > 3 days`, schedule **exactly one** reauthorization at `max(authorized_at + 3 days + margin, capture_cutoff - 2 days)`, so its new 3-day honor period covers the cutoff. Never reauthorize earlier than needed, because there is no second chance.
+- Plans may not open joining more than ~4 weeks before the cutoff (the cutoff must fall before day 29 of any authorization).
+- If the reauthorization fails, treat it like a failed capture: notify the participant, ask them to re-approve via a new join link, and offer the spot to the waitlist if they don't.
+- Pending test: `pnpm gate:paypal --reauth 2VM29849T4246562N` after 2026-10-30 04:04 Bangkok time (2026-10-29T21:04Z).
 
 ### 8.3 Other calls
 
