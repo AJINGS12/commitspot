@@ -96,13 +96,12 @@ The script rewrites the blocks below on each run.
 <!-- gate:capture:end -->
 
 <!-- gate:reauth:start -->
-#### ⏳ Authorize → reauthorize → capture: WAITING
+#### ✅ Authorize → reauthorize → capture: PASS
 
-- Run at 2026-10-26T21:06:17.880Z (UTC), sandbox, USD
-- Retrying held authorization `2VM29849T4246562N` (status CREATED, created 2026-10-26T21:04:26Z)
-- Reauthorize rejected: HTTP 422 | UNPROCESSABLE_ENTITY | REAUTHORIZATION_TOO_SOON | A reauthorization is only allowed once from Day 4 to Day 29 since the date of the original authorization. | debug_id f4854938c1501
-- Still inside the 3-day honor period. Authorization `2VM29849T4246562N` is left held (status CREATED).
-- Retry after 2026-10-29T21:04:26.000Z: `pnpm gate:paypal --reauth 2VM29849T4246562N`
+- Run at 2026-10-31T18:42:50.963Z (UTC), sandbox, USD
+- Retrying held authorization `2VM29849T4246562N` (status CREATED, created 2026-10-26T21:04:26.000Z)
+- Reauthorized `2VM29849T4246562N` → new authorization `1XG77204RF393664E` status CREATED
+- Captured against `1XG77204RF393664E` → capture `0PC7636216032332V` status COMPLETED
 <!-- gate:reauth:end -->
 
 <!-- paypal-gate:end -->
